@@ -9,6 +9,7 @@ license = "MIT"
 publish = false
 
 [workspace.dependencies]
+alacritty_terminal = "0.26"
 rf-core = { path = "crates/rf-core" }
 rf-linux = { path = "crates/rf-linux" }
 rf-player = { path = "crates/rf-player" }

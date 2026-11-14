@@ -107,7 +107,7 @@ suggest them, and `pacman -Qi rfiles-git` lists them as optional dependencies.
   - "Show disk usage", a treemap of what takes the space.
   - Git status, and hashes.
   - "Open with", listing the apps for the type with your default first.
-  - "Open in terminal", "Run command here" (or `>` and a command in the address bar), and "Open in editor".
+  - A terminal pane under the file list (F4, "Run command here", or `>` and a command in the address bar), "Open in terminal" for your own terminal app, and "Open in editor".
 - **Archives:** ZIP, 7z, RAR, the tar family and ISO open like folders, password-protected ones included. Add, delete and rename inside ZIP, 7z and tar, and create ZIP, 7z and tar.zst. [rarchive](https://github.com/gelenmedya/rarchive), rustyfiles' pure-Rust engine, does the reading.
 - **DirectLook:** previews of images (JPEG XL built in, AVIF and HEIC through the tools above), SVG, PDF, video and audio with sound, text and code, archives, and a details card for everything else.
 - **Properties window:** General, Details, Hashes, and a drive's page with its space and file system.
@@ -173,12 +173,19 @@ which covers text files up to 64 MB and is slower in big folders.
 `type:image,video` for either). `holiday type:image modified:1y` finds this year's holiday
 photos.
 
-**Terminal.** "Open in terminal" (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>&#96;</kbd>) opens your
-terminal in the current folder. To run a command there, type `>` and the command in the address
-bar (`> make`), or use "Run command here…" from the folder's right-click menu or the command
-palette. When the command finishes, the terminal stays open with a shell. Settings →
-Advanced → Terminal picks which terminal to use. Automatic tries `$TERMINAL`,
-`xdg-terminals.list`, then KDE's or GNOME's setting, then the first common terminal it finds.
+**Terminal.** <kbd>F4</kbd> opens a terminal pane under the file list, with your shell in the
+current folder. "Run command here…" (right-click menu or command palette) opens it too, and `>`
+and a command in the address bar (`> make`) runs the command there. The pane follows the
+folders you browse to while nothing is running in it, and a `cd` typed in it takes the file
+list along. Ctrl+Shift+C and Ctrl+Shift+V copy and paste, a middle click pastes, and
+Shift+PageUp/PageDown scroll back. Each tab has its own pane; F4 hides it and keeps the shell.
+The shell gets `TERM_PROGRAM=rfiles`, so your shell's startup file can skip things there, for
+example `[[ $TERM_PROGRAM != rfiles ]] && fastfetch`.
+
+"Open in terminal" (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>&#96;</kbd>) still opens your own
+terminal app in the current folder. Settings → Advanced → Terminal picks which one. Automatic
+tries `$TERMINAL`, `xdg-terminals.list`, then KDE's or GNOME's setting, then the first common
+terminal it finds.
 
 **Open/Save dialog.** With Settings → Advanced → "Use rfiles for Open and Save dialogs" on,
 apps that use the desktop portal (Firefox, Chromium, GTK, Qt and Electron apps) show rfiles

@@ -1387,5 +1387,7 @@
  "1463a002": "Open in Disks",
  "d08848e1": "Open in Partition Manager",
  "993df11d": "Open in GParted",
- "676409df": "Update available"
+ "676409df": "Update available",
+ "b5ad57e5": "Terminal pane",
+ "a4a1c06e": "Hide terminal  (F4)"
 }

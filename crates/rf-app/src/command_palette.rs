@@ -72,6 +72,7 @@ fn commands() -> Vec<Cmd> {
         cmd!("Sidebar", "Ctrl+B", L::PanelLeft, ToggleSidebar),
         cmd!("Open in terminal", "Ctrl+Shift+`", L::SquareTerminal, OpenTerminal),
         cmd!("Run command here…", "", L::Terminal, RunCommand),
+        cmd!("Terminal pane", "F4", L::SquareTerminal, ToggleTerminal),
         cmd!("Open in editor", "", L::Code, OpenInIde),
         cmd!("Light / dark theme", "Ctrl+Alt+T", L::SunMoon, ToggleTheme),
         cmd!("Open in new window", "Ctrl+Alt+Enter", L::AppWindow, OpenInNewWindow),
