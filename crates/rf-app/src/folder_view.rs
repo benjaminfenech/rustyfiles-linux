@@ -3746,6 +3746,8 @@ impl FolderView {
         let drives = places.drives.clone();
         let offline = places.offline.clone();
         let recent = places.recent.clone();
+        let saved_net = places.network.clone();
+        let servers = places.servers.clone();
         let card = |id: ElementId| {
             v_flex()
                 .id(id)
@@ -3764,6 +3766,15 @@ impl FolderView {
         // equal-width columns: a card alone on the last row is as wide as the others
         let avail = f32::from(self.content_width) - 48.; // p_6 on both sides
         let mut pinned_grid = div().grid().grid_cols(tile_cols(avail, 140., 220., 12.)).gap_3();
+        // the home folder first (the Overview page itself is what Windows calls Home)
+        if let Some(home) = dirs::home_dir() {
+            pinned_grid = pinned_grid.child(
+                card("pin-home".into())
+                    .child(Icon::new(L::House).size(px(28.)).text_color(p.accent))
+                    .child(div().text_sm().child(t!("Home")))
+                    .on_click(cx.listener(move |this, _, _, cx| this.navigate(Location::Path(home.clone()), cx))),
+            );
+        }
         for (i, f) in pinned.into_iter().enumerate() {
             let path = f.path.clone();
             pinned_grid = pinned_grid.child(
@@ -3774,8 +3785,14 @@ impl FolderView {
             );
         }
 
-        let mut drive_grid = div().grid().grid_cols(tile_cols(avail, 240., 340., 12.)).gap_3();
+        // network shares get their own section, as in the sidebar
+        let cols = tile_cols(avail, 240., 340., 12.);
+        let mut drive_grid = div().grid().grid_cols(cols).gap_3();
+        let mut net_grid = div().grid().grid_cols(cols).gap_3();
+        let mut has_drives = false;
+        let mut has_net = false;
         for (i, d) in drives.into_iter().enumerate() {
+            let is_share = d.kind == rf_linux::DriveKind::Network;
             let root = d.root.clone();
             let usage_root = d.root.clone();
             let frac = d.used_fraction();
@@ -3783,7 +3800,7 @@ impl FolderView {
             let unmounted = places::unmounted(&d);
             // a share whose server doesn't answer (away from home)
             let offline_at = offline.get(&d.root).cloned();
-            drive_grid = drive_grid.child(
+            let tile =
                 card(("drive", i).into())
                     .child(
                         h_flex()
@@ -3834,7 +3851,42 @@ impl FolderView {
                                     .child(Icon::new(L::ChartPie).size(px(16.)).text_color(p.text_secondary)),
                             ),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| this.navigate(Location::Path(root.clone()), cx))),
+                    .on_click(cx.listener(move |this, _, _, cx| this.navigate(Location::Path(root.clone()), cx)));
+            if is_share {
+                has_net = true;
+                net_grid = net_grid.child(tile);
+            } else {
+                has_drives = true;
+                drive_grid = drive_grid.child(tile);
+            }
+        }
+        // saved network locations and servers found on the network (not already listed)
+        let mut net_items: Vec<(L, String, String)> = saved_net.iter().map(|(name, t)| (L::Network, name.clone(), t.to_string_lossy().into_owned())).collect();
+        for sv in &servers {
+            if !net_items.iter().any(|(_, _, u)| u.trim_end_matches('/') == sv.url.trim_end_matches('/')) {
+                net_items.push((L::Server, sv.name.clone(), sv.url.clone()));
+            }
+        }
+        for (i, (icon, name, url)) in net_items.into_iter().enumerate() {
+            has_net = true;
+            let target = PathBuf::from(&url);
+            net_grid = net_grid.child(
+                card(("net", i).into())
+                    .child(
+                        h_flex()
+                            .gap_3()
+                            .items_center()
+                            .child(Icon::new(icon).size(px(28.)).text_color(p.text_secondary))
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap_1()
+                                    .child(div().text_sm().child(name))
+                                    .child(div().text_xs().text_color(p.text_secondary).overflow_hidden().text_ellipsis().whitespace_nowrap().child(url)),
+                            ),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| this.navigate(Location::Path(target.clone()), cx))),
             );
         }
 
@@ -3916,8 +3968,8 @@ impl FolderView {
                     .child(section(t!("Quick access")))
                     .child(pinned_grid)
                     .child(div().h_2())
-                    .child(section(t!("Drives")))
-                    .child(drive_grid)
+                    .when(has_drives, |d| d.child(section(t!("Drives"))).child(drive_grid))
+                    .when(has_net, |d| d.child(div().h_2()).child(section(t!("Network"))).child(net_grid))
                     .when(has_recent, |d| d.child(div().h_2()).child(section(t!("Recent"))))
                     .child(recent_list),
             )
