@@ -1,12 +1,14 @@
-A Network section on the Overview page, Home in Quick access, and a quiet sign in the sidebar when an update is out.
+A terminal inside rfiles: press F4 for your shell under the file list, in the folder you're in.
 
-## What's new since 0.11.0
+## What's new since 0.11.1
 
-- **Network on the Overview page.** Network shares no longer sit among the drives: they have their own Network section, with your saved network locations and the servers found on your network, as in the sidebar.
-- **Home in Quick access.** The Overview page's Quick access starts with your home folder.
-- **Update dot.** When a newer rfiles is out (or one is installed and waits for a restart), a small dot appears on the Settings icon in the sidebar. Hover it for "Update available"; Settings → About installs it.
+- **Terminal pane.** F4 opens your shell in a pane under the file list, in the current folder; F4 again hides it and keeps the shell running. "Run command here…" opens it too, and `>` and a command in the address bar (`> make`) runs the command in it.
+- **It follows you.** Browsing to a folder moves the shell there while nothing is running in it, and a `cd` typed in the pane takes the file list along.
+- **A real terminal.** Colours, scrollback, full-screen programs (vim, less, htop), mouse selection, Ctrl+Shift+C / Ctrl+Shift+V to copy and paste, middle-click paste, Shift+PageUp/PageDown to scroll back. Keys go to the shell while it has focus, so Ctrl+W deletes a word rather than closing the tab. Each tab has its own pane; drag its top edge to resize it.
+- **Skip things in it:** the shell gets `TERM_PROGRAM=rfiles`, so your shell's startup file can leave things out there, for example `[[ $TERM_PROGRAM != rfiles ]] && fastfetch`.
+- "Open in terminal" still opens your own terminal app.
 
-**Updating:** from 0.8.0 or newer, Settings → About → Install (or the status bar's "rfiles 0.11.1 available"). From 0.7.0 or older, install by hand once as below.
+**Updating:** from 0.8.0 or newer, Settings → About → Install (or the status bar's "rfiles 0.12.0 available", or the dot on Settings). From 0.7.0 or older, install by hand once as below.
 
 ## Install
 
