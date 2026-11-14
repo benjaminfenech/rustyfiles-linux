@@ -2389,6 +2389,11 @@ impl Workspace {
             let b = s.as_bytes();
             (b.len() <= 3 && b.len() >= 2 && b[1] == b':' && b[0].is_ascii_alphabetic()).then(|| (b[0] as char).to_ascii_uppercase())
         });
+        // Settings gets a small dot while a newer release waits (or one installed waits for a
+        // restart): noticeable, without a popup
+        let update_dot = target3 == Location::Settings
+            && matches!(crate::about::update_state(), crate::about::UpdateState::Available(_) | crate::about::UpdateState::Installed(_));
+        let dot_ring = p.sidebar_bg;
         h_flex()
             .id(id)
             .min_h(px(if rail { 36. } else { 32. }))
@@ -2429,8 +2434,12 @@ impl Workspace {
                                 .text_color(p.text)
                                 .child(l.to_string()),
                         )
+                    })
+                    .when(update_dot, |d| {
+                        d.child(div().absolute().right(px(-3.)).top(px(-3.)).size(px(9.)).rounded_full().bg(p.accent).border_1().border_color(dot_ring))
                     }),
             )
+            .when(update_dot, |d| d.tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new(t!("Update available")).build(w, cx)))
             .when(!rail, |d| {
                 d.child(
                     v_flex()
