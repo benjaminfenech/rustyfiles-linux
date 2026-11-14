@@ -6661,7 +6661,7 @@ dependencies = [
 
 [[package]]
 name = "rf-app"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -6691,7 +6691,7 @@ dependencies = [
 
 [[package]]
 name = "rf-archive"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "bzip2",
@@ -6714,7 +6714,7 @@ dependencies = [
 
 [[package]]
 name = "rf-core"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "chardetng",
@@ -6732,7 +6732,7 @@ dependencies = [
 
 [[package]]
 name = "rf-linux"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "ashpd",
@@ -6771,7 +6771,7 @@ dependencies = [
 
 [[package]]
 name = "rf-player"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "cpal",
