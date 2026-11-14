@@ -2472,7 +2472,7 @@ impl Workspace {
         // Settings gets a small dot while a newer release waits (or one installed waits for a
         // restart): noticeable, without a popup
         let update_dot = target3 == Location::Settings
-            && matches!(crate::about::update_state(), crate::about::UpdateState::Available(_) | crate::about::UpdateState::Installed(_));
+            && crate::about::update_waiting();
         let dot_ring = p.sidebar_bg;
         h_flex()
             .id(id)
