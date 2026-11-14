@@ -356,14 +356,8 @@ pub fn main() {
         cx.set_global(status_center::OpsGlobal(ops));
         actions::bind(cx);
         actions::bind_user(cx);
-        // the terminal pane gets every key (Ctrl+W deletes a word there, it doesn't close
-        // the tab), except F4, which hides it again
-        cx.intercept_keystrokes(|ev, _, cx| {
-            if ev.keystroke.key != "f4" && ev.context_stack.iter().any(|c| c.contains("TerminalPane")) {
-                cx.stop_propagation();
-            }
-        })
-        .detach();
+        // the terminal pane gets every key but F4 before the app's shortcuts do
+        terminal_pane::intercept(cx);
         keymap_editor::init(cx);
         if let Some(page) = &settings_arg {
             settings_view::open_page(

@@ -104,6 +104,34 @@ impl Drop for TerminalPane {
     }
 }
 
+thread_local! {
+    /// Every terminal pane, to find the focused one for a keystroke ([`intercept`]).
+    static PANES: std::cell::RefCell<Vec<WeakEntity<TerminalPane>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Sends keystrokes to the focused terminal pane before the app's shortcuts see them, so
+/// Ctrl+W deletes a word there instead of closing the tab. F4 still hides the pane. (A key
+/// stopped here doesn't reach the pane's own key listeners either, so it's handled here.)
+pub fn intercept(cx: &mut App) {
+    cx.intercept_keystrokes(|ev, window, cx| {
+        if ev.keystroke.key == "f4" || !ev.context_stack.iter().any(|c| c.contains("TerminalPane")) {
+            return;
+        }
+        let panes: Vec<_> = PANES.with(|p| {
+            let mut p = p.borrow_mut();
+            p.retain(|w| w.upgrade().is_some());
+            p.clone()
+        });
+        let focused = panes.into_iter().filter_map(|w| w.upgrade()).find(|t| t.read(cx).focus.is_focused(window));
+        if let Some(pane) = focused {
+            let ks = ev.keystroke.clone();
+            pane.update(cx, |t, cx| t.on_key(&ks, cx));
+            cx.stop_propagation();
+        }
+    })
+    .detach();
+}
+
 /// The desktop's monospace font (fontconfig's `monospace`), looked up once.
 fn mono_family() -> SharedString {
     static FAMILY: OnceLock<SharedString> = OnceLock::new();
@@ -175,6 +203,8 @@ impl TerminalPane {
 
     pub fn new(s: Started, cx: &mut Context<Self>) -> Self {
         let Started { term, sender, shell_pid, master, mut rx, size, dir, on_host } = s;
+        let me = cx.entity().downgrade();
+        PANES.with(|p| p.borrow_mut().push(me));
         cx.spawn(async move |this, cx| {
             while let Some(e) = rx.next().await {
                 if this.update(cx, |t, cx| t.on_event(e, cx)).is_err() {
@@ -343,8 +373,7 @@ impl TerminalPane {
         }
     }
 
-    fn on_key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
-        let ks = &ev.keystroke;
+    fn on_key(&mut self, ks: &Keystroke, cx: &mut Context<Self>) {
         let m = &ks.modifiers;
         // Ctrl+Shift+C / V: copy and paste (Ctrl+C stays the shell's interrupt)
         if m.control && m.shift && !m.alt {
@@ -367,7 +396,7 @@ impl TerminalPane {
             term.selection = None;
             drop(term);
             self.write(bytes);
-            cx.stop_propagation();
+            cx.notify();
         }
     }
 
@@ -692,7 +721,6 @@ impl Render for TerminalPane {
             .line_height(cell.height)
             .text_color(p.text)
             .cursor_text()
-            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, _, cx| t.on_key(ev, cx)))
             .on_scroll(cx.listener(|t, ev: &ScrollEvent, _, cx| t.on_scroll(ev, cx)))
             .on_mouse_down(
                 MouseButton::Left,
