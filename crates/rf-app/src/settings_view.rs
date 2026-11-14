@@ -204,6 +204,20 @@ fn button(id: impl Into<ElementId>, p: &Palette, label: impl Into<SharedString>,
 // ---------------------------------------------------------------- layout pieces
 
 fn card_body(p: &Palette, icon: L, title: SharedString, desc: Option<SharedString>, control: Option<AnyElement>) -> Div {
+    card_body_with(p, Icon::new(icon).size(px(18.)).flex_shrink_0().text_color(p.text).into_any_element(), title, desc, control)
+}
+
+/// The small accent dot on an icon's corner that says an update is waiting.
+fn update_dot(p: &Palette) -> Div {
+    div().absolute().right(px(-3.)).top(px(-3.)).size(px(8.)).rounded_full().bg(p.accent)
+}
+
+/// `icon` with the update dot on it when `dot`.
+fn dotted(p: &Palette, icon: L, size: f32, color: Hsla, dot: bool) -> AnyElement {
+    div().relative().flex_shrink_0().child(Icon::new(icon).size(px(size)).text_color(color)).when(dot, |d| d.child(update_dot(p))).into_any_element()
+}
+
+fn card_body_with(p: &Palette, icon: AnyElement, title: SharedString, desc: Option<SharedString>, control: Option<AnyElement>) -> Div {
     note_setting(&title, desc.as_deref());
     h_flex()
         .min_h(px(64.))
@@ -211,7 +225,7 @@ fn card_body(p: &Palette, icon: L, title: SharedString, desc: Option<SharedStrin
         .py_3()
         .gap_4()
         .items_center()
-        .child(Icon::new(icon).size(px(18.)).flex_shrink_0().text_color(p.text))
+        .child(icon)
         .child(
             v_flex()
                 .flex_1()
@@ -361,7 +375,8 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App) -> AnyElement {
                 .text_sm()
                 .when(on, |d| d.bg(p.selection).child(theme::selection_pill(p)))
                 .when(!on, |d| d.hover(|s| s.bg(p.hover)))
-                .child(Icon::new(icon).size(px(16.)).text_color(if on { p.accent } else { p.text_secondary }))
+                // About: a dot while an update waits (Settings in the sidebar has one too)
+                .child(dotted(p, icon, 16., if on { p.accent } else { p.text_secondary }, pg == Page::About && crate::about::update_waiting()))
                 .child(crate::i18n::t(label))
                 .on_click({
                     let search = search.clone();
@@ -2139,7 +2154,8 @@ fn update_card(p: &Palette) -> AnyElement {
         ),
         S::Failed(e) => (L::TriangleAlert, format!("Update failed: {e}"), check(p)),
     };
-    card(p, icon, "Updates", Some(&text), control)
+    let dot = crate::about::update_waiting();
+    shell(p).child(card_body_with(p, dotted(p, icon, 18., p.text, dot), "Updates".into(), Some(text.into()), Some(control))).into_any_element()
 }
 
 fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {

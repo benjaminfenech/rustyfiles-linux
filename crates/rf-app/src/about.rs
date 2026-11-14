@@ -45,6 +45,12 @@ fn set(s: UpdateState) {
     *STATE.lock().unwrap() = s;
 }
 
+/// A newer release waits to be installed, or an installed one for a restart: Settings, its
+/// About page and the Updates card show a dot.
+pub fn update_waiting() -> bool {
+    matches!(update_state(), UpdateState::Available(_) | UpdateState::Installed(_))
+}
+
 /// A check, download or install is running (Settings redraws while it does).
 pub fn busy() -> bool {
     matches!(update_state(), UpdateState::Checking | UpdateState::Downloading(..) | UpdateState::Installing(_))

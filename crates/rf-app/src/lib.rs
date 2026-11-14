@@ -363,6 +363,7 @@ pub fn main() {
             settings_view::open_page(
                 match page.as_str() {
                     "general" => settings_view::Page::General,
+                    "about" => settings_view::Page::About,
                     _ => settings_view::Page::Look,
                 },
                 cx,
