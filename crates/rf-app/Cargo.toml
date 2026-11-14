@@ -34,8 +34,10 @@ toml.workspace = true
 dirs.workspace = true
 crossbeam-channel.workspace = true
 futures.workspace = true
+libc = "0.2"
 image.workspace = true
 raw-window-handle.workspace = true
 chrono.workspace = true
 # the Linux platform layer
 rf-linux.workspace = true
+alacritty_terminal.workspace = true

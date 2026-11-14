@@ -39,6 +39,7 @@ mod preview;
 mod properties_view;
 mod global_keys;
 mod terminal;
+mod terminal_pane;
 mod picker;
 mod quick_search;
 mod recycle_view;
@@ -355,6 +356,8 @@ pub fn main() {
         cx.set_global(status_center::OpsGlobal(ops));
         actions::bind(cx);
         actions::bind_user(cx);
+        // the terminal pane gets every key but F4 before the app's shortcuts do
+        terminal_pane::intercept(cx);
         keymap_editor::init(cx);
         if let Some(page) = &settings_arg {
             settings_view::open_page(

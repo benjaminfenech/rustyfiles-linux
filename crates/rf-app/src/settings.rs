@@ -280,6 +280,8 @@ pub struct Settings {
     /// Pinned folders and drives open into their subfolders in the sidebar.
     pub sidebar_tree: bool,
     pub preview_width: f32,
+    /// The terminal pane's height (drag its top edge).
+    pub terminal_height: f32,
     pub restore_session: bool,
     /// Last session's tab locations ("" = Home).
     pub session_tabs: Vec<String>,
@@ -437,6 +439,7 @@ impl Default for Settings {
             sidebar_hidden: Vec::new(),
             sidebar_tree: false,
             preview_width: 300.,
+            terminal_height: 260.,
             restore_session: true,
             session_tabs: Vec::new(),
             session_active: 0,

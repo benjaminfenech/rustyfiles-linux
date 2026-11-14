@@ -86,6 +86,9 @@ struct Tab {
     left: Entity<FolderView>,
     right: Option<Entity<FolderView>>,
     right_active: bool,
+    /// The tab's terminal pane (F4, "Run command here"): kept, shell and all, while hidden.
+    terminal: Option<Entity<crate::terminal_pane::TerminalPane>>,
+    term_open: bool,
 }
 
 impl Tab {
@@ -142,6 +145,8 @@ pub struct Workspace {
     preview_w: f32,
     /// Debounced settings write after a pane resize.
     _width_save: Option<Task<()>>,
+    /// The terminal pane's height.
+    term_h: f32,
     palette: Option<Entity<crate::command_palette::CommandPalette>>,
     bulk: Option<Entity<crate::bulk_rename::BulkRename>>,
     /// Last window title / session snapshot we pushed (avoid redundant work every frame).
@@ -359,13 +364,9 @@ impl Workspace {
                 this.editing_address = false;
                 // ">make": run it in a terminal, in this folder
                 if let Some(cmd) = crate::terminal::address_command(&text) {
-                    let dir = this.active_tab().read(cx).location().path().map(Path::to_path_buf);
-                    if let Some(dir) = dir {
-                        let cmd = Some(cmd.to_string()).filter(|c| !c.is_empty());
-                        crate::terminal::open(dir, cmd, Some(window.window_handle()), cx);
-                    }
-                    this.focus_active(window, cx);
-                    cx.notify();
+                    // in the terminal pane, in this folder
+                    let cmd = Some(cmd.to_string()).filter(|c| !c.is_empty());
+                    this.show_terminal(cmd, window, cx);
                     return;
                 }
                 if text.trim().to_lowercase().starts_with("shell:") {
@@ -503,6 +504,7 @@ impl Workspace {
             rail_peek_bg: None,
             preview_w: prefs.preview_width.clamp(PREVIEW_MIN, PREVIEW_MAX),
             _width_save: None,
+            term_h: prefs.terminal_height.clamp(TERM_MIN, 2000.),
             palette: None,
             bulk: None,
             last_title: String::new(),
@@ -658,7 +660,7 @@ impl Workspace {
 
     pub fn open_tab(&mut self, loc: Location, window: &mut Window, cx: &mut Context<Self>) {
         let view = self.new_view(loc, window, cx);
-        self.tabs.push(Tab { left: view.clone(), right: None, right_active: false });
+        self.tabs.push(Tab { left: view.clone(), right: None, right_active: false, terminal: None, term_open: false });
         let ix = self.tabs.len() - 1;
         // Settings → Appearance → Animations: the "+" grows into the new tab, then a new "+"
         // slides out from behind it. Purely visual: the tab is already open and usable.
@@ -1411,17 +1413,95 @@ impl Workspace {
         Some(deferred(list).with_priority(2).into_any_element())
     }
 
-    /// "Run command here": the address bar, ready for a command (`>` and the command).
-    fn begin_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.active_tab().read(cx).location().path().is_none() {
+    /// F4: shows the active tab's terminal pane (starting a shell the first time) or hides it.
+    fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tabs[self.active].term_open {
+            self.tabs[self.active].term_open = false;
+            self.focus_active(window, cx);
+            cx.notify();
+        } else {
+            self.show_terminal(None, window, cx);
+        }
+    }
+
+    /// Shows the active tab's terminal pane in its folder and focuses it; runs `command` there
+    /// when given ("Run command here", `>command` in the address bar).
+    fn show_terminal(&mut self, command: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
+        let ix = self.active;
+        if self.tabs[ix].terminal.is_none() {
+            let here = self.active_tab().read(cx).location().path().filter(|p| p.is_dir()).map(Path::to_path_buf);
+            let Some(dir) = here.or_else(dirs::home_dir) else { return };
+            // the pane's size before it's drawn: the window less the sidebar, the preview and
+            // the margins, and the pane's height less its header
+            let cell = crate::terminal_pane::cell_size(window);
+            let side = if !self.sidebar_open { 0. } else if self.sidebar_rail { RAIL_W } else { self.sidebar_w };
+            let preview = if self.preview_open { self.preview_w } else { 0. };
+            let width = f32::from(window.viewport_size().width) - side - preview - 48.;
+            let cols = (width / f32::from(cell.width)).floor().max(20.) as usize;
+            let rows = ((self.term_h - 40.) / f32::from(cell.height)).floor().max(2.) as usize;
+            let started = match crate::terminal_pane::TerminalPane::start(&dir, cols, rows) {
+                Ok(s) => s,
+                Err(e) => {
+                    log::warn!("terminal pane: {e:#}");
+                    crate::ops::alert_box(t!("Couldn't open a terminal").to_string(), format!("{e:#}"), window.window_handle(), cx);
+                    return;
+                }
+            };
+            let pane = cx.new(|cx| crate::terminal_pane::TerminalPane::new(started, cx));
+            cx.subscribe_in(&pane, window, |this, pane, ev, window, cx| {
+                use crate::terminal_pane::TerminalEvent;
+                let Some(tab) = this.tabs.iter_mut().find(|t| t.terminal.as_ref() == Some(pane)) else { return };
+                match ev {
+                    // a cd typed in the shell: the file list goes there too
+                    TerminalEvent::CwdChanged(dir) => {
+                        let view = tab.view().clone();
+                        if view.read(cx).location().path() != Some(dir.as_path()) {
+                            let dir = dir.clone();
+                            view.update(cx, |v, cx| v.navigate(Location::Path(dir), cx));
+                        }
+                    }
+                    // `exit`: the pane goes away
+                    TerminalEvent::Exited => {
+                        tab.terminal = None;
+                        tab.term_open = false;
+                        this.focus_active(window, cx);
+                        cx.notify();
+                    }
+                }
+            })
+            .detach();
+            self.tabs[ix].terminal = Some(pane);
+        }
+        self.tabs[ix].term_open = true;
+        if let Some(pane) = self.tabs[ix].terminal.clone() {
+            // in this folder before the command runs (when the shell is free)
+            if let Some(dir) = self.active_tab().read(cx).location().path().map(Path::to_path_buf) {
+                pane.update(cx, |t, _| t.follow(&dir));
+            }
+            if let Some(cmd) = command {
+                pane.update(cx, |t, _| t.run(&cmd));
+            }
+            let focus = pane.focus_handle(cx);
+            window.focus(&focus, cx);
+        }
+        cx.notify();
+    }
+
+    /// Live terminal resize (drag its top edge); kept in settings like the pane widths.
+    fn set_terminal_height(&mut self, h: f32, max: f32, cx: &mut Context<Self>) {
+        let h = h.clamp(TERM_MIN, max.max(TERM_MIN));
+        if (self.term_h - h).abs() < 0.5 {
             return;
         }
-        self.editing_address = true;
-        self.address.update(cx, |s, cx| {
-            s.set_value("> ", window, cx);
-            s.focus(window, cx);
-            s.set_cursor_position(gpui_kit::component::input::Position::new(0, 2), window, cx);
-        });
+        self.term_h = h;
+        cx.update_global::<crate::settings::Settings, _>(|s, _| s.terminal_height = h);
+        self._width_save = Some(cx.spawn(async move |_, cx| {
+            cx.background_executor().timer(std::time::Duration::from_millis(400)).await;
+            let _ = cx.update(|cx| {
+                let snapshot = cx.global::<crate::settings::Settings>().clone();
+                std::thread::spawn(move || snapshot.save());
+            });
+        }));
         cx.notify();
     }
 
@@ -2929,7 +3009,12 @@ const SIDEBAR_MAX: f32 = 420.;
 const PREVIEW_MIN: f32 = 220.;
 const PREVIEW_MAX: f32 = 720.;
 
+/// The terminal pane's smallest height.
+const TERM_MIN: f32 = 90.;
+
 /// Drag payloads for the pane edges.
+#[derive(Clone)]
+struct ResizeTerminal;
 #[derive(Clone)]
 struct ResizeSidebar;
 #[derive(Clone)]
@@ -3258,6 +3343,72 @@ impl Render for Workspace {
                 }
             }
         };
+        // the tab's terminal under the file list (stacked), following its folder while idle
+        let terminal = tab_state.terminal.clone().filter(|_| tab_state.term_open);
+        let content: AnyElement = match terminal {
+            None => content,
+            Some(term) => {
+                if let Some(dir) = tab_state.view().read(cx).location().path().map(Path::to_path_buf) {
+                    term.update(cx, |t, _| t.follow(&dir));
+                }
+                let title = Some(term.read(cx).title().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| t!("Terminal").to_string());
+                let header = h_flex()
+                    .h(px(28.))
+                    .flex_shrink_0()
+                    .px_3()
+                    .gap_2()
+                    .items_center()
+                    .text_xs()
+                    .text_color(p.text_secondary)
+                    .child(Icon::new(L::SquareTerminal).size(px(13.)))
+                    .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(title))
+                    .child(
+                        div()
+                            .id("terminal-hide")
+                            .size(px(22.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(theme::RADIUS_SM)
+                            .hover(|s| s.bg(p.hover).text_color(p.text))
+                            .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new(t!("Hide terminal  (F4)")).build(w, cx))
+                            .on_click(cx.listener(|this, _, window, cx| this.toggle_terminal(window, cx)))
+                            .child(Icon::new(L::X).size(px(14.))),
+                    );
+                v_flex()
+                    .size_full()
+                    .on_drag_move(cx.listener(|this, e: &DragMoveEvent<ResizeTerminal>, _, cx| {
+                        let h = f32::from(e.bounds.bottom() - e.event.position.y);
+                        // the file list keeps some room
+                        this.set_terminal_height(h, f32::from(e.bounds.size.height) - 120., cx);
+                    }))
+                    .child(div().flex_1().min_h_0().w_full().child(content))
+                    .child(
+                        v_flex()
+                            .id("terminal-pane")
+                            .relative()
+                            .h(px(self.term_h))
+                            .flex_shrink_0()
+                            .w_full()
+                            .border_t_1()
+                            .border_color(p.divider)
+                            .child(header)
+                            .child(div().flex_1().min_h_0().px_3().pb_2().child(term))
+                            .child(
+                                div()
+                                    .id("terminal-resize")
+                                    .absolute()
+                                    .top(px(-3.))
+                                    .left_0()
+                                    .w_full()
+                                    .h(px(6.))
+                                    .cursor_row_resize()
+                                    .on_drag(ResizeTerminal, |_, _, _, cx| cx.new(|_| ResizeGhost)),
+                            ),
+                    )
+                    .into_any_element()
+            }
+        };
         let shelf = self.shelf_open.then(|| {
             div()
                 .w(px(260.))
@@ -3450,7 +3601,9 @@ impl Render for Workspace {
                     crate::terminal::open(dir, None, Some(window.window_handle()), cx);
                 }
             }))
-            .on_action(cx.listener(|this, _: &RunCommand, window, cx| this.begin_command(window, cx)))
+            // "Run command here": the terminal pane, in this folder
+            .on_action(cx.listener(|this, _: &RunCommand, window, cx| this.show_terminal(None, window, cx)))
+            .on_action(cx.listener(|this, _: &ToggleTerminal, window, cx| this.toggle_terminal(window, cx)))
             // Shift / Ctrl as GPUI sees them, for drops and menus (Linux; see sys::shift_down);
             // mouse moves carry them too, so a key released outside the window can't stick
             .on_modifiers_changed(|e: &ModifiersChangedEvent, _, _| crate::sys::note_modifiers(e.modifiers))
